@@ -1,5 +1,5 @@
 [package]
-name = "rust-blockchain2"
+name = "rust_blockchain"
 version = "0.1.0"
 edition = "2024"
 
