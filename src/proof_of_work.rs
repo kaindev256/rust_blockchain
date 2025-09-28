@@ -1,50 +1,46 @@
-// proof_of_work.rs
-// Implementa el algoritmo Proof of Work (PoW).
-// Aquí se usa una versión simplificada: genera hashes hasta encontrar un valor aceptable.
+//! proof_of_work.rs
+//! Implementación simplificada de Proof-of-Work.
+//! - Para el ejemplo: prueba con un target "con n ceros" sobre el hash hex.
+//! - Devuelve nonce y hash en hexadecimal.
 
 use crate::block::Block;
-use num_bigint::BigInt;
-use num_traits::One;
-use sha2::{Sha256, Digest};
+use sha2::{Digest, Sha256};
+use data_encoding::HEXLOWER;
 
-// Número máximo de intentos de nonce
-pub const MAX_NONCE: i64 = 1_000_000;
-
-// Estructura que contiene el bloque a minar y el target de dificultad
 pub struct ProofOfWork {
     pub block: Block,
-    pub target: BigInt,
+    pub target_zeroes: usize,
 }
 
 impl ProofOfWork {
-    // Crea un nuevo PoW para un bloque dado
-    pub fn new(block: Block) -> Self {
-        // Se define un target muy alto (dificultad baja para pruebas)
-        let mut target = BigInt::one();
-        target = (&target << 240); 
-        ProofOfWork { block, target }
+    pub fn new(block: Block, target_zeroes: usize) -> Self {
+        ProofOfWork { block, target_zeroes }
     }
 
-    // Ejecuta el proceso de minado
-    pub fn run(&self) -> (i64, String) {
+    /// Ejecuta PoW: ciclo de nonce hasta que el hash hex tenga `target_zeroes` ceros al inicio.
+    /// (Muy simple y lento para producción; sirve para aprendizaje.)
+    pub fn run(&mut self) -> (i64, String) {
         let mut nonce: i64 = 0;
-        while nonce < MAX_NONCE {
-            // Prepara los datos del bloque
-            let mut hasher = Sha256::new();
-            hasher.update(self.block.prev_hash.as_bytes());
-            for tx in &self.block.transactions {
-                hasher.update(tx);
+        loop {
+            let mut trial = self.block.header_bytes();
+            trial.extend_from_slice(&nonce.to_be_bytes());
+            let hash = sha256(&trial);
+            let hex = HEXLOWER.encode(&hash);
+            if Self::hash_matches_target(&hex, self.target_zeroes) {
+                return (nonce, hex);
             }
-            hasher.update(self.block.timestamp.to_string().as_bytes());
-            hasher.update(nonce.to_string().as_bytes());
-            
-            // Calcula el hash
-            let hash = hasher.finalize();
-            let hex = hex::encode(hash.as_slice());
-
-            // En esta versión simple aceptamos el primer hash generado
-            return (nonce, hex);
+            nonce += 1;
+            // nota: en ejemplos reales controlar límite o interrupción
         }
-        (nonce, String::new())
     }
+
+    fn hash_matches_target(hex: &str, target_zeroes: usize) -> bool {
+        hex.starts_with(&"0".repeat(target_zeroes))
+    }
+}
+
+fn sha256(data: &[u8]) -> Vec<u8> {
+    let mut hasher = Sha256::new();
+    hasher.update(data);
+    hasher.finalize().to_vec()
 }
